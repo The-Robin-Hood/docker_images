@@ -1,0 +1,52 @@
+FROM debian:11
+
+ARG USER=robin
+ARG PASSWORD=robin
+ARG VNCPASSWD=robin
+
+# Prevents the installation of any interactive configuration tools
+ENV DEBIAN_FRONTEND=noninteractive 
+
+RUN apt-get update && apt-get install -y \
+    tightvncserver \
+    xfce4 \
+    xfce4-goodies \
+    xterm \
+    dbus-x11 \ 
+    firefox-esr \
+    sudo \
+    autocutsel \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN useradd -m -s /bin/bash $USER
+RUN echo "$USER:$PASSWORD" | chpasswd
+RUN usermod -aG sudo $USER
+
+# Set up VNC for the non-root user
+USER $USER
+ENV USER=$USER
+ENV HOME=/home/$USER
+WORKDIR $HOME
+
+RUN mkdir -p $HOME/.vnc
+RUN echo "$VNCPASSWD" | vncpasswd -f > $HOME/.vnc/passwd
+RUN chmod 600 $HOME/.vnc/passwd
+
+# Configure VNC
+RUN echo '#!/bin/bash\nxrdb $HOME/.Xresources\nautocutsel -fork\nstartxfce4 &' > $HOME/.vnc/xstartup
+RUN chmod +x $HOME/.vnc/xstartup
+
+# Create a startup script
+USER root
+RUN echo '#!/bin/bash\n\
+vncserver -kill :1 > /dev/null 2>&1 || true\n\
+rm -rf /tmp/.X*-lock /tmp/.X11-unix/X* $HOME/.vnc/*.pid\n\
+su - $USER -c "vncserver :1 -geometry 1920x1080 -depth 24"\n\
+tail -f /home/$USER/.vnc/*:1.log' > /start.sh && chmod +x /start.sh
+
+# Start VNC server
+CMD ["/start.sh"]
+
+EXPOSE 3000
+EXPOSE 5901
