@@ -1,0 +1,47 @@
+FROM debian:11
+
+# Prevents the installation of any interactive configuration tools
+ENV DEBIAN_FRONTEND=noninteractive 
+
+RUN apt-get update && apt-get install -y \
+    tightvncserver \
+    xfce4 \
+    xfce4-goodies \
+    xterm \
+    dbus-x11 \ 
+    firefox-esr \
+    sudo \
+    wget \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    ssl-cert \
+    libswitch-perl \
+    libyaml-tiny-perl \
+    libhash-merge-simple-perl \
+    liblist-moreutils-perl \
+    libdatetime-timezone-perl\
+    expect
+
+
+RUN wget https://github.com/kasmtech/KasmVNC/releases/download/v1.3.2/kasmvncserver_bullseye_1.3.2_amd64.deb
+RUN sudo apt-get install ./kasmvncserver_*.deb -y
+RUN sudo addgroup root ssl-cert
+
+RUN echo "root:root" | chpasswd
+
+RUN mkdir -p /root/.vnc
+RUN touch /root/.vnc/kasmvnc.yaml
+RUN echo "network:\n  websocket_port: 8444\nlogging:\n  log_writer_name: all\n  log_dest: logfile\n  level: 100\ncommand_line:\n  prompt: false" > /root/.vnc/kasmvnc.yaml
+
+RUN echo "ansari\nansari\n" | vncpasswd -u  ansari -ow
+
+RUN echo "#!/bin/bash\n\
+vncserver -kill :1 > /dev/null 2>&1 || true\n\
+rm -rf /tmp/.X*-lock /tmp/.X11-unix/X* /root/.vnc/*.pid\n\
+vncserver\n\
+tail -f /root/.vnc/*:1.log" > /start.sh && chmod +x /start.sh
+
+CMD ["/start.sh"]
+
+EXPOSE 8444
