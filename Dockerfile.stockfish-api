@@ -1,0 +1,54 @@
+FROM python:3.10-slim
+
+RUN apt-get update
+RUN apt-get install stockfish
+
+WORKDIR /app
+
+RUN pip install fastapi
+RUN pip install uvicorn
+RUN pip install stockfish
+
+RUN cat <<EOF > main.py
+import os
+from fastapi import FastAPI, Body
+from fastapi.middleware.cors import CORSMiddleware
+from stockfish import Stockfish
+
+app = FastAPI(
+    title='Chess API',
+    description='Simple REST API with FastAPI and Stockfish',
+    version='1.0.0'
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
+
+@app.get('/')
+def index():
+    return {'message': 'Go to \'/docs\' in your browser to view the documentation.'}
+
+
+@app.post('/suggest-move')
+def suggest_move(fen: str = Body(...)):
+    stockfish = Stockfish(path='/usr/games/stockfish')
+    stockfish.set_fen_position(fen)
+    stockfish.set_elo_rating(1500)
+    best_move = stockfish.get_best_move_time(1000)
+    return {'best_move': best_move}
+EOF
+
+ENV PORT=8000
+ENV HOST=0.0.0.0
+
+ENV UVICORN_PORT=$PORT
+ENV UVICORN_HOST=$HOST
+
+EXPOSE $PORT
+
+CMD ["uvicorn", "main:app"]
