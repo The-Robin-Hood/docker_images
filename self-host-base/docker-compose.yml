@@ -1,0 +1,76 @@
+# -------------------------------------------------------------------------------
+# Common configuration blocks 
+# -------------------------------------------------------------------------------
+x-restart-policy: &restart_policy
+  restart: always
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Cloudflare Tunnel
+  # ---------------------------------------------------------------------------
+  cloudflare:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare_tunnel
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?err CLOUDFLARE_TUNNEL_TOKEN is not set}
+    <<: *restart_policy
+
+  # ---------------------------------------------------------------------------
+  # 2. Dashy Dashboard
+  # ---------------------------------------------------------------------------
+  dashy:
+    image: lissy93/dashy:latest
+    container_name: dashy_dashboard
+    ports:
+      - "${DASHY_PORT:-4444}:8080"
+    volumes:
+      - dashy_data:/app/user-data
+    <<: *restart_policy
+
+  # ---------------------------------------------------------------------------
+  # 3. PrivateBin 
+  # ---------------------------------------------------------------------------
+  privatebin:
+    image: privatebin/nginx-fpm-alpine
+    container_name: privatebin
+    read_only: true
+    ports:
+      - "${PRIVATEBIN_PORT:-4001}:8080"
+    volumes:
+      - privatebin_data:/srv/data
+    <<: *restart_policy
+
+  # ---------------------------------------------------------------------------
+  # 4. Mathesar 
+  # ---------------------------------------------------------------------------
+  mathesar_db:
+    image: postgres:17
+    container_name: mathesar_db
+    environment:
+      POSTGRES_USER: ${MATHESAR_DB_USER:?err MATHESAR_DB_USER is not set}
+      POSTGRES_PASSWORD: ${MATHESAR_DB_PASSWORD:?err MATHESAR_DB_PASSWORD is not set}
+      POSTGRES_DB: ${MATHESAR_DB_NAME:?err MATHESAR_DB_NAME is not set}
+    volumes:
+      - mathesar_db_data:/var/lib/postgresql/data
+    <<: *restart_policy
+
+  mathesar:
+    image: mathesar/mathesar:latest
+    container_name: mathesar
+    depends_on:
+      - mathesar_db
+    ports:
+      - "${MATHESAR_PORT:-4002}:8000"
+    environment:
+      SECRET_KEY: ${MATHESAR_SECRET_KEY:?err MATHESAR_SECRET_KEY is not set}
+      ALLOWED_HOSTS: ${MATHESAR_ALLOWED_HOSTS:-*}
+      POSTGRES_USER: ${MATHESAR_DB_USER:?err MATHESAR_DB_USER is not set}
+      POSTGRES_PASSWORD: ${MATHESAR_DB_PASSWORD:?err MATHESAR_DB_PASSWORD is not set}
+      POSTGRES_DB: ${MATHESAR_DB_NAME:?err MATHESAR_DB_NAME is not set}
+      POSTGRES_HOST: ${MATHESAR_DB_HOST:?err MATHESAR_DB_HOST is not set}
+      POSTGRES_PORT: ${MATHESAR_DB_PORT:-5432}
+    <<: *restart_policy
+
+volumes:
+  dashy_data:
+  privatebin_data:
+  mathesar_db_data:
